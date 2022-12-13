@@ -36,22 +36,128 @@ Let us first introduce the mathematical notions and notations that will be used 
 :CUSTOM_ID: sec:random-variables
 :END:
 
-Here we describe Aesara's =RandomVariable= as a map from RNG states to elements in the RV's domain. By tying the sample space $\Omega$ to the set of possible RNG states, we see that =RandomVariable= is /almost/ a random variable in the mathematical sense. Indeed, we only specify the =dtype= of =rng_fn= and not the destination manifold of the function.
+Random variables are represented in Aesara with the =RandomVariable= operator, which corresponds to the following mathematical function:
 
-Also mention that =ndim_supp= and =ndims_params= will be replaced by a gufunc signature.
+$$
+\operatorname{RandomVariable}: \Omega \times \Theta \to E
+$$
 
-Discuss the meaning of the result of =rng_fn= when the =size= argument is used.
+Where $\Omega$ is the set of available seeds for the pseudo-random number generator, $\Theta$ the parameter space and $E$ the state space, in which the random variable takes its values. Aesara defines several random variable that are implicitly associated with probability measures of known density, association that is made explicit in AePPL. An Aesara graph that contains =RandomVariable= operators return samples from the associated distribution, i.e. elements of $E$ weighed by the density:
+
+#+begin_src python
+import aesara.tensor as at
+
+srng = at.random.RandomStream(0)
+x_rv = srng.normal(0, 1)
+print(x_rv.eval())
+#+end_src
+
+#+RESULTS:
+:results:
+1.4436909546981256
+:end:
+
+The parameters of =RandomVariable=\s and the state space $E$ can be of different types; the mean $\mu$ and $\sigma$ parameters of =NormalRV= are scalars $\in \mathbb{R}$ but, for instance, =DirichletRV= takes a vector $\alpha \in \mathbb{R}^k$ as a parameter and returns a vector $\in \mathbb{R}^k$:
+
+#+begin_src python
+import aesara.tensor as at
+
+srng = at.random.RandomStream(0)
+alpha = at.as_tensor([1., 1., 1.])
+x_rv = srng.dirichlet(alpha)
+print(x_rv.eval())
+#+end_src
+
+#+RESULTS:
+:results:
+[0.62036389 0.14374215 0.23589397]
+:end:
+
+To create independent random variables, the =RandomVariable= operators apply the broadcasting rules between the parameters; Identically indepedently distributed random variables can be represented by a =RandomVariable= operator where the parameter =size= is used.
+
+
+=RandomVariable= operators behave like generalized universal functions; they possess a set of core dimensionalities and can be vectorized over arrays of parameters, or repeated. This behavior is summarized in a gufunc-like signature =(), () -> ()= signature.
 
 * Measures
 :PROPERTIES:
 :CUSTOM_ID: sec:measures
 :END:
 
+Like [[citet:carette2016]] we add informal typing rule which define a data type of measures. We will say in the above cases that elements of $E$ are respectively of type $\mathbb{R}$ (type of reals) and $\mathbb{R}^k$ (type of real vectors). We define an abstract type of measures by saying that if $A$ is a type, let $\mathbb{M}A$ be a measure over $A$:
+
+$$
+\frac{
+    \mu : \mathbb{R} \qquad \sigma : \mathbb{R}
+}{
+    \operatorname{normal}(\mu, \sigma) : \mathbb{M}\mathbb{R}
+}
+$$
+
+$$
+\frac{
+    \alpha : \mathbb{R}^k
+}{
+    \operatorname{dirichlet}(\alpha) : \mathbb{M}\mathbb{R}^k
+}
+$$
+
+
+$$
+\frac{
+    n : \mathbb{N} \qquad p : \mathbb{R}^k
+}{
+    \operatorname{multinomial}(n, p) : \mathbb{M}\mathbb{N}^k
+}
+$$
+
+
+The type of elements of $E$ is called the /domain type/.
+
 Here we describe how we define measures, and attach measures to existing =RandomVariable= objects. We need the manifold the =RandomVariable= maps to (/domain/), the base measure relative to which the density is computed.
 
 Manifolds: $\mathbb{R}$, $\mathbb{Z}$, $\left[a, b\right]$, $\mathbb{B}$, Circle (for future work), etc.
 
-Base measures: Counting measure, Lebesgue measure, Dirac (which has the counting measure as a base).
+We further specify the abstract type $\mathbb{M}A$ by defining subtypes that correspond to the base measure relative to which the density is defined:
+
+$\operatorname{Lebesgue}(A)$
+$\operatorname{Counting}(A)$
+
+For instance:
+
+$$
+\frac{
+    \mu : \mathbb{R} \qquad \sigma : \mathbb{R}
+}{
+    \operatorname{normal}(\mu, \sigma) : \operatorname{Lebesgue}(\mathbb{R})
+}
+$$
+
+$$
+\frac{
+    \alpha : \mathbb{R}^k
+}{
+    \operatorname{dirichlet}(\alpha) : \operatorname{Lebesgue}(\mathbb{R}^k)
+}
+$$
+
+
+$$
+\frac{
+    n : \mathbb{N} \qquad p : \mathbb{R}^k
+}{
+    \operatorname{multinomial}(n, p) : \operatorname{Counting}(\mathbb{R}^k)
+}
+$$
+
+
+An important measure is the =dirac= measure defined in AePPL:
+
+$$
+\frac{x: \mathbb{R}}{
+ \operatorname{dirac}(x): \operatorname{Counting}(\left\{x\right\})
+}
+$$
+
 
 Describe how densities are assigned to measures.
 
